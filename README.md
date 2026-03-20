@@ -14,7 +14,7 @@ flowchart TB
     Routes[HTTP routes]
   end
 
-  subgraph Redis[(Redis)]
+  subgraph Redis[Redis]
     Queue[Celery queue / broker]
   end
 
@@ -22,7 +22,7 @@ flowchart TB
     Tasks[Process webhook/sync tasks]
   end
 
-  subgraph DB[(PostgreSQL)]
+  subgraph DB[PostgreSQL]
     Storage[Upsert payloads + sync status]
   end
 
@@ -35,7 +35,7 @@ flowchart TB
   end
 
   Webhook -->|HTTP POST| Routes
-  Routes -->|enqueue (delay)| Queue
+  Routes -->|enqueue delay| Queue
   Queue --> Tasks
 
   Tasks --> Storage
