@@ -1,0 +1,30 @@
+---
+description: Local Redis via Docker Compose; run API and Celery on host vs in Compose; optional Flower.
+globs: toy-celery-jobs/**/docker-compose*.yml, **/docker-compose*.yml, **/Dockerfile*
+alwaysApply: false
+---
+
+# Toy Docker Local (Redis)
+
+Full setup: `.cursor/skills/celery-redis-jobs/setup.md`.
+
+## Minimal docker-compose.yml
+
+```yaml
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+```
+
+- Document `REDIS_URL=redis://localhost:6379/0`.
+
+## Two-process model
+
+- Terminal A: `uvicorn api:app --reload`
+- Terminal B: `celery -A worker worker -l info` (optional `--beat` for schedules).
+
+## Pitfall
+
+- Using `localhost` inside a container vs host networking differs on Linux/Mac/Windows; for host-run API and worker, `localhost` in `REDIS_URL` is correct.

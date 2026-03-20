@@ -1,0 +1,40 @@
+---
+description: Test Celery-backed routes and tasks locally (pytest, mocks); verify behavior in Azure/staging (smoke, logs, Redis TLS).
+globs: tests/**/*.py, **/test_*.py, tasks/**/*.py, **/routes/**/*.py, **/api.py
+alwaysApply: false
+---
+
+# Celery Testing (Local and Azure)
+
+Code samples: `.cursor/skills/celery-redis-jobs/reference.md`.
+
+## Local testing
+
+### Route / API tests
+
+- Patch task `.delay` to assert enqueue args without a running worker.
+- Example: `patch("routes.jobs.process_webhook")` then `mock_task.delay.assert_called_once()` and inspect `call_args[0][0]` for the enqueued id.
+
+### Task unit tests
+
+- Use `task.run(...)` (eager execution) with mocked service I/O; no broker required.
+- Mock `chord`, `group`, `chain` when testing orchestration logic only.
+
+### Integration
+
+- `ENVIRONMENT=test`, `.env.test`; optional real Redis + worker for manual E2E.
+
+### Commands
+
+- `pytest`, `pytest tests/routes/test_jobs.py`, `pytest tests/tasks/test_jobs.py::test_name`.
+
+## Azure / staging testing
+
+- Point `REDIS_URL` at staging secret (`rediss://`); API and worker must share the same broker URL.
+- Confirm worker revision is running and scaled > 0.
+- **Smoke:** `POST /jobs/sync` (or health + trivial task), then poll `GET /runs/{id}` or check DB.
+
+## Pitfalls
+
+- TLS Redis requires `rediss` + SSL config in worker; firewall/network between worker and Azure Redis.
+- Do not rely on Celery result backend for long-lived job status; use persisted run rows.

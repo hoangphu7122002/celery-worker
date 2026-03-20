@@ -1,0 +1,36 @@
+---
+description: OpenAI client setup, OPENAI_API_KEY, OPENAI_BASE_URL, model selection, structured output parsing.
+globs: config.py, **/ai/**/*.py, **/lib/*llm*.py
+alwaysApply: false
+---
+
+# OpenAI Setup
+
+## Config
+
+- `OPENAI_API_KEY` — required for API calls.
+- `OPENAI_BASE_URL` — optional; use for OpenRouter or other compatible endpoints (e.g. `https://openrouter.ai/api/v1`).
+- `EXTRACTION_MODEL`, `CONVERSATION_MODEL` — model names from settings (e.g. `gpt-5.4`, `openai/gpt-5-mini`).
+- Nested `settings.openai` with `api_key` and `base_url`.
+
+## Client (sample)
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=settings.openai.api_key,
+    base_url=settings.openai.base_url,
+)
+completion = client.chat.completions.create(
+    model=model,
+    messages=[{"role": "user", "content": content}],
+)
+raw = completion.choices[0].message.content
+```
+
+## Usage patterns
+
+- **Structured output**: Parse LLM response (JSON or key-value lines) into Pydantic models; handle malformed output gracefully.
+- **Prompt templates**: Use f-strings or `.format()` for prompts; keep templates as module-level constants.
+- **Model selection**: Pass `model` from settings or as function arg; default to `settings.conversation_model` or `settings.extraction_model`.

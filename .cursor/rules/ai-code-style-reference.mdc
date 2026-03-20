@@ -1,0 +1,29 @@
+---
+description: Coding conventions: minimal change, OOP, env vars, task pattern. Use when building from scratch or editing projects.
+globs: worker.py, tasks/**/*.py, config.py, **/api.py, **/main.py, toy-celery-jobs/**
+alwaysApply: false
+---
+
+# Code Style Reference
+
+Code samples: `.cursor/skills/celery-redis-jobs/reference.md`.
+
+## General
+
+- Minimal code change; follow OOP principles.
+- Comment for "why" only, not "what" (except method and class documentation).
+
+## Env and config
+
+- Env vars: single underscore (`REDIS_URL`, `DATABASE_URL`).
+- Pydantic Settings with nested access (e.g. `settings.redis.url` via `@property`).
+
+## Imports
+
+- Order: stdlib, third-party, local.
+- Task decorator: `from worker import worker`.
+
+## Task pattern
+
+- `@worker.task(bind=True, max_retries=0)`.
+- Thin sync wrapper + `async def _...` implementation + `run_async_task` for async DB.

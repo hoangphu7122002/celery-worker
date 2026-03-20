@@ -1,0 +1,37 @@
+---
+description: From-scratch FastAPI + Celery + Redis: folder layout, pyproject, minimal worker/tasks/API, env vars.
+globs: toy-celery-jobs/**, **/worker.py, **/tasks/**/*.py
+alwaysApply: false
+---
+
+# Toy Greenfield Scaffold (FastAPI + Celery + Redis)
+
+Full setup: `.cursor/skills/celery-redis-jobs/setup.md`. Code samples: `.cursor/skills/celery-redis-jobs/reference.md`.
+
+## Target tree
+
+```
+my-project/
+├── pyproject.toml
+├── .env.example
+├── config.py
+├── worker.py
+├── api.py
+├── tasks/
+│   ├── __init__.py
+│   └── jobs.py
+└── tests/
+```
+
+## Dependencies
+
+- `fastapi`, `uvicorn`, `celery[redis]`, `redis`, `pydantic-settings`, `python-dotenv`
+- Optional: `sqlmodel`, `asyncpg` if keeping a `JobRun` table.
+
+## Env vars
+
+- `REDIS_URL` — single queue name `celery` to match worker `-Q celery`.
+
+## First milestone
+
+- Task `process_job.delay(job_id)`; HTTP `POST /jobs/{id}` calling `delay` and returning `task_id`.

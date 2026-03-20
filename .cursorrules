@@ -1,0 +1,62 @@
+# Celery + Redis background jobs — rules and skills index
+
+Background-job conventions live in `.cursor/rules/`. Use skills when scaffolding or debugging. All code is self-contained in skills; no external codebase required.
+
+## Full flow (Postgres + Redis + Celery + FastAPI + OpenAI)
+
+End-to-end: HTTP → FastAPI → Celery (Redis broker) → Worker (DB + OpenAI) → PostgreSQL.
+
+```mermaid
+flowchart TB
+  subgraph client [Client]
+    HTTP[HTTP Request]
+  end
+  subgraph api [FastAPI]
+    API[API Routes]
+    SessionDep[SessionDep]
+  end
+  subgraph worker [Celery Worker]
+    Task[Task]
+    DB[AsyncSession]
+    LLM[OpenAI Client]
+  end
+  subgraph infra [Infrastructure]
+    Postgres[(PostgreSQL)]
+    Redis[(Redis)]
+  end
+  HTTP --> API
+  API -->|delay| Redis
+  Redis --> Task
+  Task --> DB
+  Task --> LLM
+  API --> SessionDep
+  SessionDep --> Postgres
+  DB --> Postgres
+```
+
+**Code reference**: `.cursor/skills/celery-redis-jobs/reference.md` — full code for config, Postgres (storage/database), Redis (worker, zendesk_llm_limiter), ZendeskService, run_async_task. Canonical demo: `.cursor/skills/celery-redis-jobs/zendesk-full-flow.md`.
+
+## Rules (by purpose)
+
+- **celery-worker-tasks** — `.cursor/rules/celery-worker-tasks.mdc` — @worker.task, sync/webhook, chord/chain, run_async_task
+- **ai-code-style-reference** — `.cursor/rules/ai-code-style-reference.mdc` — style: minimal change, OOP, env vars, task pattern
+- **postgres-setup** — `.cursor/rules/postgres-setup.mdc` — DATABASE_URL, asyncpg, SSL for Azure, AsyncSession
+- **openai-setup** — `.cursor/rules/openai-setup.mdc` — OPENAI_API_KEY, base_url, model selection, client usage
+- **flyway-migrations** — `.cursor/rules/flyway-migrations.mdc` — Flyway SQL migrations (not Alembic), db/migration, Azure job
+- **azure-deploy-full** — `.cursor/rules/azure-deploy-full.mdc` — PostgreSQL, Redis, Container Apps, Key Vault, build→migrate→deploy
+- **celery-redis-infra** — `.cursor/rules/celery-redis-infra.mdc` — REDIS_URL local vs Azure rediss, SSL, worker Container App
+- **celery-testing-local-azure** — `.cursor/rules/celery-testing-local-azure.mdc` — pytest delay/run mocks, staging smoke, TLS pitfalls
+- **toy-greenfield-scaffold** — `.cursor/rules/toy-greenfield-scaffold.mdc` — from-scratch layout, pyproject, worker, tasks
+- **toy-docker-local** — `.cursor/rules/toy-docker-local.mdc` — docker-compose Redis, host-run API+worker
+- **toy-azure-minimal** — `.cursor/rules/toy-azure-minimal.mdc` — smallest Azure path: rediss, two Container Apps, secrets
+
+## Skills
+
+- **celery-redis-jobs** — `.cursor/skills/celery-redis-jobs/SKILL.md` — worker + FastAPI setup, Postgres, OpenAI, Flyway, Azure
+- **zendesk-full-flow** — `.cursor/skills/celery-redis-jobs/zendesk-full-flow.md` — full Zendesk flow (OpenAI, DB, Redis)
+- **toy-fastapi-celery-scaffold** — `.cursor/skills/toy-fastapi-celery-scaffold/SKILL.md` — phase checklist from scratch
+- **toy-celery-verify-local-azure** — `.cursor/skills/toy-celery-verify-local-azure/SKILL.md` — verification matrix (curl, worker logs, pytest, Azure smoke)
+
+## Quick start (worker + FastAPI)
+
+See `.cursor/skills/celery-redis-jobs/setup.md` for full setup: config, worker, FastAPI app, run commands (Redis, worker, API), and how to trigger tasks from HTTP. For the full stack (Postgres, OpenAI), add `DATABASE_URL` and `OPENAI_API_KEY`; see `.cursor/skills/celery-redis-jobs/reference.md` for full code samples.

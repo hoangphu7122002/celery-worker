@@ -1,0 +1,30 @@
+---
+description: Smallest Azure path for a toy: how rediss:// differs, two Container Apps or Job, secrets, shared image.
+globs: toy-celery-jobs/**, **/infra/**/*.tf
+alwaysApply: false
+---
+
+# Toy Azure Minimal
+
+Full setup: `.cursor/skills/celery-redis-jobs/setup.md`. SSL branch in `.cursor/skills/celery-redis-jobs/reference.md`.
+
+## Same REDIS_URL for API and worker
+
+- Must be `rediss://` for Azure Cache for Redis with TLS-only port.
+- Worker SSL branch:
+
+```python
+redis_ssl_options = None
+if urlparse(settings.redis.url).scheme == "rediss":
+    redis_ssl_options = {"ssl_cert_reqs": ssl.CERT_REQUIRED}
+worker.conf.broker_use_ssl = redis_ssl_options
+worker.conf.redis_backend_use_ssl = redis_ssl_options
+```
+
+## Checklist
+
+- Redis firewall; Container App env secret for `REDIS_URL`; worker command `celery -A worker worker -Q celery ...`.
+
+## Verification
+
+- Log stream + one enqueue from deployed API + worker picks up task.

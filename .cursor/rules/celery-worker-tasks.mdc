@@ -1,0 +1,71 @@
+---
+description: Celery worker app, @worker.task, sync/webhook enqueue patterns, chord/group/chain, async in tasks.
+globs: worker.py, tasks/**/*.py, **/routes/**/*.py, **/api.py, **/main.py
+alwaysApply: false
+---
+
+# Celery Worker and Tasks
+
+Code samples: `.cursor/skills/celery-redis-jobs/reference.md`, setup: `.cursor/skills/celery-redis-jobs/setup.md`.
+
+## Worker and task registration
+
+- One Celery instance in `worker.py`; broker and backend both use `settings.redis.url`.
+- Tasks use `@worker.task(...)` (import `worker` from `worker`), not bare `@shared_task`.
+- `autodiscover_tasks(["tasks"])` discovers the `tasks` package.
+- Single default queue `celery`; worker command uses `-Q celery`.
+
+## Enqueue from FastAPI
+
+- Persist the domain entity first (commit to DB), then `.delay(primary_key)` so workers see committed state.
+- Never rely on Celery result backend as the source of truth for job status; use a persisted run row and poll `GET /runs/{id}`.
+
+## Sync job pattern
+
+- Create a run row, set status `pending`, commit, then `sync_job.delay(run.id)`.
+- Entry points: HTTP `POST /sync` or Beat-scheduled task (creates run inside task, then delays main pipeline).
+- Pipeline: load run, set `running`, fetch ids, then chord/group/chain.
+
+**Task + run_async_task:**
+
+```python
+@worker.task(bind=True, max_retries=0)
+def sync_job(self, run_id: int) -> None:
+    run_async_task(_sync_job(run_id))
+```
+
+**Chord pipeline** (fan-out per id, then finalize):
+
+```python
+chord(
+    group([chain(sync_item.s(id), process_item.s()) for id in ids])
+)(update_run.s(run_id))
+```
+
+**Route enqueue:**
+
+```python
+run = JobRun(status="pending")
+session.add(run)
+await session.commit()
+await session.refresh(run)
+sync_job.delay(run.id)
+return run
+```
+
+## Webhook pattern
+
+- Accept quickly (202), persist payload, commit, then `process_webhook.delay(event.id)`.
+
+```python
+event = WebhookEvent(payload=await request.json())
+session.add(event)
+await session.commit()
+await session.refresh(event)
+process_webhook.delay(event.id)
+return {}
+```
+
+## Async DB in tasks
+
+- Celery tasks are sync; wrap coroutines with `run_async_task` so SQLModel/asyncpg gets a dedicated loop and `engine.dispose()` runs afterward to avoid pool leaks.

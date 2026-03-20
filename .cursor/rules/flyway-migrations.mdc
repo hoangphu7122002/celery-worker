@@ -1,0 +1,49 @@
+---
+description: Flyway SQL migrations instead of Alembic, db/migration layout, CLI usage, Azure migration job.
+globs: db/migration/**/*.sql, **/infra/**/container-apps/*.tf, Dockerfile*
+alwaysApply: false
+---
+
+# Flyway Migrations
+
+Use Flyway (SQL-based) instead of Alembic for schema migrations.
+
+## Structure
+
+```
+db/
+  migration/
+    V1__create_tables.sql
+    V2__add_column.sql
+```
+
+- Naming: `V<version>__<description>.sql` (double underscore).
+- Version: integer or dotted (e.g. `V1`, `V1_1`, `V2`).
+
+## Execution (Flyway CLI)
+
+```bash
+flyway -url=$DATABASE_URL -locations=filesystem:db/migration migrate
+```
+
+- Download Flyway CLI or use Docker: `flyway/flyway` image.
+- For PostgreSQL, URL format: `jdbc:postgresql://host:5432/dbname` (Flyway uses JDBC; for CLI, `-url` accepts same format with `jdbc:` prefix — check Flyway docs for exact syntax).
+
+## Docker
+
+- **Option A**: Use `flyway/flyway` image, mount migrations, pass `DATABASE_URL` as env.
+- **Option B**: Add Flyway CLI to app image; run `flyway migrate` in migration job.
+
+## Azure migration job
+
+Replace Alembic command with Flyway. Sample: one-shot Container App Job with `flyway/flyway` image:
+
+```hcl
+command = ["flyway", "-url=${var.database_connection_string}", "-locations=filesystem:/flyway/sql", "migrate"]
+```
+
+Mount migrations into `/flyway/sql` or bake into image. Convert `postgresql://` to `jdbc:postgresql://` if Flyway expects JDBC URL.
+
+## Skill reference
+
+See `.cursor/skills/celery-redis-jobs/flyway-migrations.md` for folder layout, CLI usage, and Azure job command.

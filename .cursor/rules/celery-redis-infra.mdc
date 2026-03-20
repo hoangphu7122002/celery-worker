@@ -1,0 +1,39 @@
+---
+description: Redis URL for broker/backend, local docker/host vs Azure Cache TLS, worker Container App secrets.
+globs: worker.py, config.py, docker-compose*.yml, **/redis/**/*.tf, **/container-apps/*.tf
+alwaysApply: false
+---
+
+# Celery Redis Infrastructure (Local vs Azure)
+
+Code samples: `.cursor/skills/celery-redis-jobs/setup.md`, `.cursor/skills/celery-redis-jobs/reference.md`.
+
+## Single REDIS_URL
+
+- One `REDIS_URL` env var for both Celery broker and result backend.
+- Config exposes `settings.redis.url` (from `redis_url`).
+
+## Local development
+
+- **URL:** `redis://localhost:6379/0`.
+- **Start Redis:** `docker run -d -p 6379:6379 redis:7-alpine` or host `redis-server`.
+- **Run worker:** `celery -A worker worker -Q celery -l info`.
+- **Run API:** `uvicorn api:app --reload`.
+
+## Azure
+
+- **URL:** `rediss://:key@host:ssl_port/0` — TLS-only; non-SSL port disabled on Azure Cache for Redis.
+- Worker SSL: set `broker_use_ssl` and `redis_backend_use_ssl` when URL scheme is `rediss`:
+
+```python
+redis_ssl_options = None
+if urlparse(settings.redis.url).scheme == "rediss":
+    redis_ssl_options = {"ssl_cert_reqs": ssl.CERT_REQUIRED}
+worker.conf.broker_use_ssl = redis_ssl_options
+worker.conf.redis_backend_use_ssl = redis_ssl_options
+```
+
+## Worker Container App
+
+- Same image as API; separate worker container with `REDIS_URL` from secret.
+- Command: `python -m celery -A worker worker -Q celery --beat --concurrency N`.

@@ -1,0 +1,46 @@
+---
+description: PostgreSQL setup with asyncpg, DATABASE_URL, SSL for Azure, AsyncSession, local dev scripts.
+globs: config.py, **/storage/database.py, **/models/*.py, **/scripts/start-db.sh
+alwaysApply: false
+---
+
+# PostgreSQL Setup
+
+## Config
+
+- `DATABASE_URL` from Pydantic Settings (e.g. `database_url: str`).
+- Nested `settings.database.url` for consistency with Redis/OpenAI.
+
+## Engine and SSL
+
+- Convert `postgresql://` to `postgresql+asyncpg://` for async support.
+- Azure PostgreSQL Flexible Server uses `sslmode=require` in URL; asyncpg rejects `sslmode` — strip it and pass `connect_args={"ssl": True}`:
+
+```python
+_needs_ssl = "sslmode=" in _async_url
+if _needs_ssl:
+    parsed = urlparse(_async_url)
+    qs = parse_qs(parsed.query)
+    qs.pop("sslmode", None)
+    new_query = urlencode(qs, doseq=True)
+    _async_url = urlunparse(parsed._replace(query=new_query))
+engine = create_async_engine(_async_url, connect_args={"ssl": True} if _needs_ssl else {})
+```
+
+## Session
+
+- `AsyncSession` with `autoflush=False`, `autocommit=False`, `expire_on_commit=False`.
+- `get_session` async generator as FastAPI dependency.
+- Type alias: `SessionDep = Annotated[AsyncSession, Depends(get_session)]`.
+
+## Local dev
+
+- `DATABASE_URL=postgresql://user@localhost:5432/dbname` for local; `?sslmode=require` for Azure.
+- Sample: Docker Postgres + create dev/test DBs from `.env.dev` / `.env.test`:
+
+```bash
+# Load .env, .env.dev, .env.test; parse DEV_DB/TEST_DB from DATABASE_URL
+docker run -d --name postgres-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=${DEV_DB} -p 5432:5432 -v postgres-data:/var/lib/postgresql/data postgres:alpine
+# Wait for pg_isready; create test DB via psql if not exists
+```

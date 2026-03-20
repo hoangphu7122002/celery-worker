@@ -1,0 +1,27 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cursor_worker
+    ports:
+      - "5432:5432"
+
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/cursor_worker
+      CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-4}
+    depends_on:
+      - redis
+      - postgres
+    deploy:
+      replicas: ${NUM_WORKERS:-3}

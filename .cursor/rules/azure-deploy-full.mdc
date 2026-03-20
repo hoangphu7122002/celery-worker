@@ -1,0 +1,71 @@
+---
+description: Full Azure deployment: PostgreSQL Flexible Server, Redis, Container Apps, Key Vault, build→migrate→deploy flow.
+globs: **/infra/**/*.tf, .github/workflows/deploy*.yml
+alwaysApply: false
+---
+
+# Azure Deployment (Full Flow)
+
+## Infrastructure (Terraform)
+
+- **PostgreSQL Flexible Server** — `azurerm_postgresql_flexible_server`; `sslmode=require`; private DNS zone for VNet.
+- **Redis Cache** — `rediss://` TLS-only.
+- **Container Apps** — API, Worker, Migration Job (one-shot). Sample migration job:
+
+```hcl
+resource "azurerm_container_app_job" "migrate" {
+  name                         = "caj-${var.project_name}-migrate-${var.environment}"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  manual_trigger_config { parallelism = 1; replica_completion_count = 1 }
+  template {
+    container {
+      name    = "migrate"
+      image   = var.container_image  # or flyway/flyway
+      command = ["flyway", "-url=${var.database_connection_string}", "-locations=filesystem:/flyway/sql", "migrate"]
+      env { name = "DATABASE_URL"; value = var.database_connection_string }
+    }
+  }
+}
+```
+
+- **Key Vault**: Stores `DATABASE_URL`, `REDIS_URL`, `OPENAI_API_KEY`, Basic Auth, etc.
+
+## Deploy flow (sample)
+
+1. **Build** — Build Docker image, push to ACR.
+2. **Migrate** — Start migration Container App Job; wait for completion.
+3. **Deploy** — Update API and Worker Container Apps with new image.
+
+```yaml
+jobs:
+  build-and-push:
+    steps: [checkout, docker-login, build-push]
+    outputs: { image: ... }
+  migrate:
+    needs: build-and-push
+    steps:
+      - run: |
+          EXECUTION=$(az containerapp job start --name caj-PROJECT-migrate-ENV --resource-group rg-PROJECT-ENV --query "name" -o tsv)
+          for i in $(seq 1 30); do
+            STATUS=$(az containerapp job execution show --job-execution-name "$EXECUTION" ... --query "properties.status" -o tsv)
+            [ "$STATUS" = "Succeeded" ] && exit 0
+            [ "$STATUS" = "Failed" ] && exit 1
+            sleep 10
+          done
+  deploy:
+    needs: migrate
+    steps:
+      - run: az containerapp update --name ca-PROJECT-api-ENV ... --image ${{ needs.build-and-push.outputs.image }}
+      - run: az containerapp update --name ca-PROJECT-worker-ENV ... --image ${{ needs.build-and-push.outputs.image }}
+```
+
+## Secrets
+
+- `DATABASE_URL`, `REDIS_URL`, `OPENAI_API_KEY` from Key Vault or Container App secrets.
+- Migration job receives `DATABASE_URL`; runs Alembic (`alembic upgrade head`) or Flyway (`flyway migrate`).
+
+## Migration job
+
+- One-shot job (manual trigger) before each deploy.
+- Command: `flyway migrate` (see sample above) or `python -m alembic upgrade head` if using Alembic.
+- See `.cursor/rules/flyway-migrations.mdc` for Flyway details.
